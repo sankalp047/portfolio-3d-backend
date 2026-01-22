@@ -49,7 +49,7 @@ app.use("/src", express.static(SRC_DIR));
 ================================ */
 if (!process.env.OPENAI_API_KEY) {
   console.error("❌ Missing OPENAI_API_KEY in environment variables.");
-  console.error("Create /server/.env with OPENAI_API_KEY=... then restart the server.");
+  console.error("Add OPENAI_API_KEY in Render Environment Variables, then redeploy.");
   process.exit(1);
 }
 
@@ -64,10 +64,15 @@ const hasMailgun =
   Boolean(process.env.OWNER_EMAIL);
 
 const mailgun = new Mailgun(FormData);
+
+// Support US/EU endpoints (set MAILGUN_API_BASE_URL if needed)
+const MAILGUN_API_BASE_URL = process.env.MAILGUN_API_BASE_URL || "https://api.mailgun.net";
+
 const mg = hasMailgun
   ? mailgun.client({
       username: "api",
       key: process.env.MAILGUN_API_KEY,
+      url: MAILGUN_API_BASE_URL,
     })
   : null;
 
@@ -81,7 +86,7 @@ const CONFIG = {
 };
 
 /* ================================
-   System Prompt for ChatGPT
+   Default System Prompt (Professional)
 ================================ */
 const SYSTEM_PROMPT = `You are the AI assistant for Sankalp Singh, a Full Stack Developer based in Dallas, Texas.
 
@@ -101,26 +106,27 @@ IMPORTANT GUIDELINES:
 - Use proper business communication style
 - Do NOT use markdown headers (##). Use plain text with line breaks.
 
-SANKALP'S BASIC INFO:
-- Name: Sankalp Singh
-- Title: Full Stack Developer
-- Location: Dallas, Texas
-- Phone: 682-219-8682
-- Availability: Monday-Friday, 9 AM - 6 PM CST
-- Response Time: Within 24 hours
-
 If user asks something personal/biographical and it is not in the knowledge base, do NOT guess.`;
 
 /* ================================
-   Simple Knowledge Base (RAG)
-   - Reads /server/profile.json
+   Knowledge Base (RAG)
+   - Reads /server/profiles.json  (multi profiles)
+   - (Optional legacy) /server/profile.json
    - Reads /server/knowledge/*.md
-   - Keyword retrieval (simple + fast)
+   - Keyword retrieval
 ================================ */
-const PROFILE_PATH = path.join(__dirname, "profile.json");
+
+// Optional legacy single profile support
+const LEGACY_PROFILE_PATH = path.join(__dirname, "profile.json");
+
+// NEW multi-profile file (put it in /server/profiles.json)
+const PROFILES_PATH = path.join(__dirname, "profiles.json");
+
 const KNOWLEDGE_DIR = path.join(__dirname, "knowledge");
 
-let PROFILE = {};
+let LEGACY_PROFILE = {};
+let PROFILES = { default: "default", profiles: {} };
+
 let KNOWLEDGE_CHUNKS = [];
 let KNOWLEDGE_LAST_LOADED_AT = null;
 
@@ -145,12 +151,39 @@ function chunkText(text, maxLen = 900) {
   return chunks;
 }
 
-async function loadProfile() {
+async function loadLegacyProfile() {
   try {
-    const raw = await fs.readFile(PROFILE_PATH, "utf8");
+    const raw = await fs.readFile(LEGACY_PROFILE_PATH, "utf8");
     return JSON.parse(raw);
   } catch {
     return {};
+  }
+}
+
+function normalizeProfiles(raw) {
+  // Supported shapes:
+  // 1) { "default": "sankalp", "profiles": { "sankalp": {...}, "anaita": {...} } }
+  // 2) { "default": "sankalp", "sankalp": {...}, "anaita": {...} }
+  if (!raw || typeof raw !== "object") return { default: "default", profiles: {} };
+
+  if (raw.profiles && typeof raw.profiles === "object") {
+    const def = typeof raw.default === "string" ? raw.default : "default";
+    return { default: def, profiles: raw.profiles };
+  }
+
+  const copy = { ...raw };
+  const def = typeof copy.default === "string" ? copy.default : "default";
+  delete copy.default;
+
+  return { default: def, profiles: copy };
+}
+
+async function loadProfiles() {
+  try {
+    const raw = await fs.readFile(PROFILES_PATH, "utf8");
+    return normalizeProfiles(JSON.parse(raw));
+  } catch {
+    return { default: "default", profiles: {} };
   }
 }
 
@@ -179,10 +212,12 @@ function retrieveByKeywords(query, chunks, k = 6) {
     .map((ch) => {
       const t = ch.text.toLowerCase();
       let score = 0;
+
       for (const term of terms) {
         if (t.includes(term)) score += 1;
       }
-      // Bonus points if user references a file name conceptually
+
+      // Bonus if user mentions file concept
       const fileHint = ch.source.replace(".md", "").toLowerCase();
       if (q.includes(fileHint)) score += 2;
 
@@ -194,21 +229,126 @@ function retrieveByKeywords(query, chunks, k = 6) {
   return scored.slice(0, k);
 }
 
-/**
- * This is the “brain builder”:
- * - It merges SYSTEM_PROMPT + PROFILE + top knowledge excerpts
- * - Then ChatGPT answers grounded in your real info (not generic)
- */
-function buildAssistantInstructions(userMessage) {
-  const name = PROFILE.preferredName || PROFILE.name || "Sankalp Singh";
-  const tone = PROFILE.tone || "professional, confident, concise";
+function normalizeProfileId(id) {
+  return String(id || "").trim().toLowerCase();
+}
 
-  const top = retrieveByKeywords(userMessage, KNOWLEDGE_CHUNKS, 6);
+function containsTerm(text, term) {
+  const t = String(text || "").toLowerCase();
+  const q = String(term || "").toLowerCase().trim();
+  if (!q) return false;
 
-  // If no matching chunks, force safe behavior (no generic hallucinations)
+  // numeric identifiers (phone etc) -> simple includes
+  if (/^\d{6,}$/.test(q)) return t.includes(q);
+
+  // word boundary match for names/aliases
+  const re = new RegExp(`\\b${q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i");
+  return re.test(t);
+}
+
+function inferProfileIdFromMessage(message) {
+  const msg = String(message || "").toLowerCase();
+
+  for (const [id, p] of Object.entries(PROFILES.profiles || {})) {
+    const pid = normalizeProfileId(id);
+
+    // terms to detect
+    const terms = new Set([pid]);
+
+    if (p?.name && typeof p.name === "string") {
+      const first = p.name.split(/\s+/)[0]?.toLowerCase();
+      if (first) terms.add(first);
+      terms.add(p.name.toLowerCase());
+    }
+
+    if (Array.isArray(p?.aliases)) {
+      for (const a of p.aliases) {
+        if (typeof a === "string" && a.trim()) terms.add(a.trim().toLowerCase());
+      }
+    }
+
+    for (const term of terms) {
+      if (containsTerm(msg, term)) return pid;
+    }
+  }
+
+  return null;
+}
+
+function getActiveProfile(profileId, userMessage) {
+  const requested = normalizeProfileId(profileId);
+
+  if (requested && PROFILES.profiles?.[requested]) {
+    return { id: requested, ...PROFILES.profiles[requested] };
+  }
+
+  // Auto-detect from message if no profileId provided (or invalid)
+  const inferred = inferProfileIdFromMessage(userMessage);
+  if (inferred && PROFILES.profiles?.[inferred]) {
+    return { id: inferred, ...PROFILES.profiles[inferred] };
+  }
+
+  const def = normalizeProfileId(PROFILES.default) || "default";
+  if (PROFILES.profiles?.[def]) {
+    return { id: def, ...PROFILES.profiles[def] };
+  }
+
+  // fallback: no profiles.json configured
+  return { id: "default" };
+}
+
+function getKnowledgePoolForProfile(activeProfile) {
+  const files = activeProfile?.knowledgeFiles;
+
+  // IMPORTANT:
+  // If knowledgeFiles is defined, we only use those files.
+  // This prevents personal files (like anaita.md) leaking into default/public mode.
+  if (Array.isArray(files)) {
+    const allow = new Set(files.map((f) => String(f)));
+    return KNOWLEDGE_CHUNKS.filter((ch) => allow.has(ch.source));
+  }
+
+  // No filter defined -> use all knowledge
+  return KNOWLEDGE_CHUNKS;
+}
+
+function buildAssistantInstructions(userMessage, profileId) {
+  const active = getActiveProfile(profileId, userMessage);
+
+  const name =
+    active.name ||
+    LEGACY_PROFILE.preferredName ||
+    LEGACY_PROFILE.name ||
+    "Sankalp Singh";
+
+  const tone =
+    active.tone ||
+    LEGACY_PROFILE.tone ||
+    "professional, confident, concise";
+
+  const systemPrompt =
+    active.systemPrompt ||
+    SYSTEM_PROMPT;
+
+  const knowledgePool = getKnowledgePoolForProfile(active);
+  const top = retrieveByKeywords(userMessage, knowledgePool, 6);
+
+  // Keep prompt profile block small + safe
+  const profileForPrompt = {
+    id: active.id,
+    name: active.name,
+    tone: active.tone,
+    rules: active.rules,
+    notes: active.notes,
+    // do NOT include secrets
+  };
+
   if (!top.length) {
     return `
-${SYSTEM_PROMPT}
+${systemPrompt}
+
+ACTIVE PROFILE:
+${JSON.stringify(profileForPrompt, null, 2)}
 
 VOICE:
 - ${tone}
@@ -217,11 +357,10 @@ VOICE:
 - Max 6–10 sentences unless user asks for more.
 
 RULES:
-- Use PROFILE as the only source of truth for personal details.
+- Use the PROFILE + KNOWLEDGE as the only source of truth.
 - If missing, say: "I don’t want to guess—if you share a bit more detail, I’ll answer accurately."
-
-PROFILE (JSON):
-${JSON.stringify(PROFILE, null, 2)}
+- Do NOT invent personal facts or memories.
+- No markdown headers like "##". Plain text with line breaks.
 `.trim();
   }
 
@@ -230,9 +369,12 @@ ${JSON.stringify(PROFILE, null, 2)}
     .join("\n\n---\n\n");
 
   return `
-${SYSTEM_PROMPT}
+${systemPrompt}
 
-You are the AI assistant for ${name}.
+You are speaking as the assistant for: ${name}
+
+ACTIVE PROFILE:
+${JSON.stringify(profileForPrompt, null, 2)}
 
 VOICE:
 - ${tone}
@@ -241,13 +383,9 @@ VOICE:
 - Ask ONE follow-up question if needed.
 
 RULES:
-- Use PROFILE + KNOWLEDGE excerpts as source of truth.
-- If missing, say: "I can confirm that and get back to you."
-- Do not invent details.
-- No markdown headers like "##". Plain text.
-
-PROFILE (JSON):
-${JSON.stringify(PROFILE, null, 2)}
+- Use the KNOWLEDGE excerpts as source of truth.
+- Do not invent details or memories.
+- No markdown headers like "##". Plain text with line breaks.
 
 KNOWLEDGE (most relevant excerpts):
 ${knowledgeBlock}
@@ -255,14 +393,15 @@ ${knowledgeBlock}
 }
 
 async function initRAG() {
-  PROFILE = await loadProfile();
+  LEGACY_PROFILE = await loadLegacyProfile();
+  PROFILES = await loadProfiles();
   KNOWLEDGE_CHUNKS = await loadKnowledge();
   KNOWLEDGE_LAST_LOADED_AT = new Date().toISOString();
 
   console.log(
-    `📚 Knowledge loaded: ${KNOWLEDGE_CHUNKS.length} chunks | profile: ${
-      Object.keys(PROFILE).length ? "yes" : "no"
-    } | ${KNOWLEDGE_LAST_LOADED_AT}`
+    `📚 Knowledge loaded: ${KNOWLEDGE_CHUNKS.length} chunks | profiles: ${
+      Object.keys(PROFILES.profiles || {}).length
+    } | defaultProfile: ${PROFILES.default || "default"} | ${KNOWLEDGE_LAST_LOADED_AT}`
   );
 }
 
@@ -272,11 +411,10 @@ async function initRAG() {
 
 /**
  * POST /api/chat
- * Handle chatbot messages using OpenAI (ChatGPT) API
  */
 app.post("/api/chat", async (req, res) => {
   try {
-    const { message, history = [] } = req.body;
+    const { message, history = [], profileId } = req.body;
 
     if (!message || typeof message !== "string") {
       return res.status(400).json({ error: "Message is required" });
@@ -299,9 +437,12 @@ app.post("/api/chat", async (req, res) => {
       { role: "user", content: message },
     ];
 
+    // Determine active profile (so we can return it in meta)
+    const active = getActiveProfile(profileId, message);
+
     const response = await openai.responses.create({
       model: process.env.OPENAI_MODEL || "gpt-4o-mini",
-      instructions: buildAssistantInstructions(message),
+      instructions: buildAssistantInstructions(message, profileId),
       input: messages,
       max_output_tokens: 700,
       temperature: 0.6,
@@ -314,6 +455,7 @@ app.post("/api/chat", async (req, res) => {
       response: assistantMessage,
       success: true,
       meta: {
+        activeProfileId: active.id,
         knowledgeLoadedAt: KNOWLEDGE_LAST_LOADED_AT,
         chunks: KNOWLEDGE_CHUNKS.length,
       },
@@ -328,7 +470,19 @@ app.post("/api/chat", async (req, res) => {
 });
 
 /**
- * OPTIONAL: manual reload endpoint (handy while editing .md files)
+ * Debug: list profiles
+ * GET /api/profiles
+ */
+app.get("/api/profiles", (req, res) => {
+  const ids = Object.keys(PROFILES.profiles || {});
+  res.json({
+    success: true,
+    default: PROFILES.default || "default",
+    profiles: ids,
+  });
+});
+
+/**
  * GET /api/reload-knowledge
  */
 app.get("/api/reload-knowledge", async (req, res) => {
@@ -338,6 +492,8 @@ app.get("/api/reload-knowledge", async (req, res) => {
       success: true,
       message: "Knowledge reloaded",
       meta: {
+        defaultProfile: PROFILES.default || "default",
+        profiles: Object.keys(PROFILES.profiles || {}).length,
         knowledgeLoadedAt: KNOWLEDGE_LAST_LOADED_AT,
         chunks: KNOWLEDGE_CHUNKS.length,
       },
@@ -353,7 +509,6 @@ app.get("/api/reload-knowledge", async (req, res) => {
 
 /**
  * POST /api/contact
- * Handle contact form submissions via Mailgun
  */
 app.post("/api/contact", async (req, res) => {
   try {
@@ -428,7 +583,7 @@ app.post("/api/contact", async (req, res) => {
             <p style="color: #666; font-size: 16px; line-height: 1.6;">Thank you for reaching out! I've received your message and will get back to you within 24 hours.</p>
             <p style="color: #666; font-size: 16px; line-height: 1.6;">Best regards,<br><strong style="color: #333;">Sankalp Singh</strong><br>Full Stack Developer</p>
             <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; text-align: center;">
-              <p style="color: #999; font-size: 14px;">📱 682-219-8682 | 📍 Dallas, Texas</p>
+              <p style="color: #999; font-size: 14px;">📍 Dallas, Texas</p>
             </div>
           </div>
         </div>
@@ -450,7 +605,6 @@ app.post("/api/contact", async (req, res) => {
 
 /**
  * POST /api/schedule-meeting
- * Handle meeting scheduling requests
  */
 app.post("/api/schedule-meeting", async (req, res) => {
   try {
@@ -468,7 +622,6 @@ app.post("/api/schedule-meeting", async (req, res) => {
       return res.status(400).json({ error: "All fields are required" });
     }
 
-    // Keeping your meeting flow intact (simple email version)
     const meetingNotificationEmail = {
       from: `Portfolio Assistant <noreply@${CONFIG.mailgunDomain}>`,
       to: CONFIG.ownerEmail,
@@ -478,7 +631,6 @@ app.post("/api/schedule-meeting", async (req, res) => {
 
     const requesterConfirmationEmail = {
       from: `Sankalp Singh <postmaster@${CONFIG.mailgunDomain}>`,
-
       to: email,
       subject: `Meeting Request Received - Sankalp Singh`,
       text: `Hi ${name},\n\nI received your meeting request for ${preferredDateTime}. I’ll confirm within 24 hours.\n\n- Sankalp`,
@@ -496,12 +648,9 @@ app.post("/api/schedule-meeting", async (req, res) => {
     });
   }
 });
-console.log("MAILGUN_DOMAIN:", process.env.MAILGUN_DOMAIN);
-console.log("OWNER_EMAIL:", process.env.OWNER_EMAIL);
-console.log("MAILGUN_KEY exists:", Boolean(process.env.MAILGUN_API_KEY));
 
 /**
- * Health check endpoint
+ * Health check
  */
 app.get("/api/health", (req, res) => {
   res.json({ status: "healthy", timestamp: new Date().toISOString() });
@@ -517,24 +666,15 @@ app.get("*", (req, res) => {
 ================================ */
 await initRAG();
 
-// Auto-refresh knowledge every 5 minutes (so you can edit .md files without restart)
+// Auto-refresh knowledge every 5 minutes
 setInterval(initRAG, 5 * 60 * 1000);
 
 app.listen(PORT, () => {
   console.log(`
 ╔═══════════════════════════════════════════════════════════╗
-║                                                           ║
 ║   🚀 Sankalp Singh Portfolio Server                       ║
-║                                                           ║
-║   Server running on: http://localhost:${PORT}              ║
-║                                                           ║
-║   API Endpoints:                                          ║
-║   • POST /api/chat              - AI Chatbot               ║
-║   • GET  /api/reload-knowledge  - Reload RAG (dev)         ║
-║   • POST /api/contact           - Contact Form             ║
-║   • POST /api/schedule-meeting  - Meeting Scheduler        ║
-║   • GET  /api/health            - Health Check             ║
-║                                                           ║
+║   Running on: http://localhost:${PORT}                    ║
+║   API: POST /api/chat | GET /api/health | GET /api/profiles ║
 ╚═══════════════════════════════════════════════════════════╝
 `);
 });
