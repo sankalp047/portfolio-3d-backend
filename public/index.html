@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Sankalp Singh - Full Stack Developer specializing in Mobile Apps, Websites, and 3D Development">
+    <meta name="keywords" content="Full Stack Developer, Web Developer, Mobile Apps, React, Node.js, Three.js">
+    <meta name="author" content="Sankalp Singh">
+    
+    <title>Sankalp Singh | Full Stack Developer</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollToPlugin.min.js"></script>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    
+    <link rel="stylesheet" href="/src/css/styles.css">
+</head>
+<body>
+    <!-- Loader -->
+    <div id="loader">
+        <div class="loader-content">
+            <div class="loader-text">
+                <span class="loader-letter">S</span>
+                <span class="loader-letter">A</span>
+                <span class="loader-letter">N</span>
+                <span class="loader-letter">K</span>
+                <span class="loader-letter">A</span>
+                <span class="loader-letter">L</span>
+                <span class="loader-letter">P</span>
+            </div>
+            <div class="loader-bar">
+                <div class="loader-progress"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cursor (hidden on touch devices) -->
+    <div class="custom-cursor"></div>
+    <div class="cursor-follower"></div>
+
+    <!-- Navigation -->
+    <nav id="navbar">
+        <div class="nav-logo">
+            <span class="logo-text">SS</span>
+        </div>
+        <div class="nav-links">
+            <a href="#hero" class="nav-link active" data-section="0">Home</a>
+            <a href="#about" class="nav-link" data-section="1">About</a>
+            <a href="#skills" class="nav-link" data-section="2">Skills</a>
+            <a href="#projects" class="nav-link" data-section="3">Projects</a>
+            <a href="#contact" class="nav-link" data-section="4">Contact</a>
+        </div>
+        <button class="nav-cta" onclick="openChatbot()">
+            <span>Let's Talk</span>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+            </svg>
+        </button>
+        <button class="mobile-menu-btn" aria-label="Toggle menu">
+            <span></span>
+            <span></span>
+            <span></span>
+        </button>
+    </nav>
+
+    <!-- Mobile Menu -->
+    <div class="mobile-menu">
+        <div class="mobile-menu-content">
+            <a href="#hero" class="mobile-link">Home</a>
+            <a href="#about" class="mobile-link">About</a>
+            <a href="#skills" class="mobile-link">Skills</a>
+            <a href="#projects" class="mobile-link">Projects</a>
+            <a href="#contact" class="mobile-link">Contact</a>
+        </div>
+    </div>
+
+    <!-- 3D Canvas Container (positioned behind content) -->
+    <div id="canvas-container"></div>
+
+    <!-- Scroll Progress -->
+    <div class="scroll-progress">
+        <div class="scroll-progress-bar"></div>
+    </div>
+
+    <!-- Main Content -->
+    <main id="main-content">
+        <!-- HERO: 3D on LEFT, Text on RIGHT -->
+        <section id="hero" class="section" data-section="0">
+            <div class="section-content hero-content hero-flipped">
+                <!-- 3D Model Space (LEFT side - handled by canvas) -->
+                <div class="hero-3d-space"></div>
+                
+                <!-- Text Content (RIGHT side) -->
+                <div class="hero-text">
+                    <div class="hero-greeting">
+                        <span class="greeting-line"></span>
+                        <span class="greeting-text">Hi,</span>
+                    </div>
+                    <h1 class="hero-name">
+                        <span class="name-line">I am</span>
+                        <span class="name-line">Sankalp</span>
+                        <span class="name-line accent">Singh</span>
+                    </h1>
+                    <div class="hero-title">
+                        <span class="title-bracket">{</span>
+                        <span class="title-text">Full Stack Developer</span>
+                        <span class="title-bracket">}</span>
+                    </div>
+                    <p class="hero-description">
+                        Crafting digital experiences from concept to deployment.
+                        <br>Mobile apps, web platforms, and immersive 3D worlds.
+                    </p>
+                    <div class="hero-cta">
+                        <a href="#projects" class="btn btn-primary">
+                            <span>View My Work</span>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="5" y1="12" x2="19" y2="12"></line>
+                                <polyline points="12 5 19 12 12 19"></polyline>
+                            </svg>
+                        </a>
+                        <a href="#contact" class="btn btn-secondary">Get In Touch</a>
+                    </div>
+                </div>
+            </div>
+            <div class="scroll-indicator">
+                <span class="scroll-text">Scroll to explore</span>
+                <div class="scroll-mouse">
+                    <div class="scroll-wheel"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ABOUT: Text on LEFT, 3D flows to RIGHT -->
+        <section id="about" class="section" data-section="1">
+            <div class="section-content about-content">
+                <div class="section-header">
+                    <span class="section-number">01</span>
+                    <h2 class="section-title">About Me</h2>
+                    <div class="section-line"></div>
+                </div>
+                <div class="about-layout">
+                    <div class="about-text-column">
+                        <p class="about-intro">
+                            I'm a <span class="highlight">Full Stack Developer</span> passionate about building 
+                            exceptional digital experiences that live at the intersection of design and technology.
+                        </p>
+                        <p class="about-body">
+                            From architecting robust backend systems to crafting pixel-perfect user interfaces, 
+                            I handle the entire development lifecycle. My expertise extends beyond traditional 
+                            web development into <span class="highlight">3D modeling with Blender</span>, 
+                            allowing me to create immersive visual experiences.
+                        </p>
+                        <p class="about-body">
+                            I build <span class="highlight">mobile applications</span> for iOS and Android, 
+                            <span class="highlight">web platforms</span> with modern frameworks, and 
+                            <span class="highlight">custom CRM solutions</span> that streamline business operations.
+                        </p>
+                        <div class="about-stats">
+                            <div class="stat">
+                                <span class="stat-number" data-count="5">4</span>
+                                <span class="stat-label">Years Experience</span>
+                            </div>
+                            <div class="stat">
+                                <span class="stat-number" data-count="50">9</span>
+                                <span class="stat-suffix">+</span>
+                                <span class="stat-label">Projects Completed</span>
+                            </div>
+                            <div class="stat">
+                                <span class="stat-number" data-count="20">200000</span>
+                                <span class="stat-suffix">+</span>
+                                <span class="stat-label">Total Project Downloads</span>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- 3D Model flows to this space on RIGHT via scroll -->
+                    <div class="about-3d-space"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SKILLS -->
+        <section id="skills" class="section" data-section="2">
+            <div class="section-content skills-content">
+                <div class="section-header">
+                    <span class="section-number">02</span>
+                    <h2 class="section-title">Skills & Expertise</h2>
+                    <div class="section-line"></div>
+                </div>
+                <div class="skills-container">
+                    <div class="skills-category">
+                        <h3 class="category-title">
+                            <span class="category-icon">🎨</span>
+                            Frontend Development
+                        </h3>
+                        <div class="skills-grid">
+                            <div class="skill-card"><div class="skill-icon">⚛️</div><span class="skill-name">React</span></div>
+                            <div class="skill-card"><div class="skill-icon">▲</div><span class="skill-name">Next.js</span></div>
+                            <div class="skill-card"><div class="skill-icon">🌐</div><span class="skill-name">HTML5/CSS3</span></div>
+                            <div class="skill-card"><div class="skill-icon">📜</div><span class="skill-name">JavaScript</span></div>
+                            <div class="skill-card"><div class="skill-icon">🔷</div><span class="skill-name">TypeScript</span></div>
+                            <div class="skill-card"><div class="skill-icon">🎨</div><span class="skill-name">Tailwind CSS</span></div>
+                            <div class="skill-card"><div class="skill-icon">🎲</div><span class="skill-name">Three.js</span></div>
+                            <div class="skill-card"><div class="skill-icon">📱</div><span class="skill-name">React Native</span></div>
+                        </div>
+                    </div>
+                    <div class="skills-category">
+                        <h3 class="category-title">
+                            <span class="category-icon">⚙️</span>
+                            Backend Development
+                        </h3>
+                        <div class="skills-grid">
+                            <div class="skill-card"><div class="skill-icon">🟢</div><span class="skill-name">Node.js</span></div>
+                            <div class="skill-card"><div class="skill-icon">🚂</div><span class="skill-name">Express.js</span></div>
+                            <div class="skill-card"><div class="skill-icon">🍃</div><span class="skill-name">MongoDB</span></div>
+                            <div class="skill-card"><div class="skill-icon">🐘</div><span class="skill-name">PostgreSQL</span></div>
+                            <div class="skill-card"><div class="skill-icon">🔥</div><span class="skill-name">Firebase</span></div>
+                            <div class="skill-card"><div class="skill-icon">🐳</div><span class="skill-name">Docker</span></div>
+                            <div class="skill-card"><div class="skill-icon">🔗</div><span class="skill-name">REST APIs</span></div>
+                            <div class="skill-card"><div class="skill-icon">📊</div><span class="skill-name">GraphQL</span></div>
+                        </div>
+                    </div>
+                    <div class="skills-category">
+                        <h3 class="category-title">
+                            <span class="category-icon">🛠️</span>
+                            Tools & Other
+                        </h3>
+                        <div class="skills-grid">
+                            <div class="skill-card"><div class="skill-icon">🐙</div><span class="skill-name">Git/GitHub</span></div>
+                            <div class="skill-card"><div class="skill-icon">🎥</div><span class="skill-name">Blender</span></div>
+                            <div class="skill-card"><div class="skill-icon">🎨</div><span class="skill-name">Figma</span></div>
+                            <div class="skill-card"><div class="skill-icon">💳</div><span class="skill-name">Stripe</span></div>
+                            <div class="skill-card"><div class="skill-icon">🤖</div><span class="skill-name">AI/Claude API</span></div>
+                            <div class="skill-card"><div class="skill-icon">📧</div><span class="skill-name">Mailgun</span></div>
+                            <div class="skill-card"><div class="skill-icon">☁️</div><span class="skill-name">AWS</span></div>
+                            <div class="skill-card"><div class="skill-icon">▲</div><span class="skill-name">Vercel</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- PROJECTS (No 3D here) -->
+        <section id="projects" class="section" data-section="3">
+            <div class="section-content projects-content">
+                <div class="section-header">
+                    <span class="section-number">03</span>
+                    <h2 class="section-title">Featured Projects</h2>
+                    <div class="section-line"></div>
+                </div>
+                <div class="projects-showcase">
+                    <div class="project-card featured">
+                        <div class="project-media mobile-screenshot floating-phone">
+                            <img src="/assets/images/1.png" alt="Radio Sangam App" class="project-phone-image">
+                            <div class="project-overlay">
+                                <div class="project-links">
+                                    <a href="https://telugusangam.net" target="_blank" class="project-link">
+                                        <span>🌐</span><span>Live Site</span>
+                                    </a>
+                                    <a href="#" class="project-link">
+                                        <span>🍎</span><span>App Store</span>
+                                    </a>
+                                    <a href="#" class="project-link">
+                                        <span>🤖</span><span>Play Store</span>
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="project-info">
+                            <div class="project-tags">
+                                <span class="tag">React Native</span>
+                                <span class="tag">Firebase</span>
+                                <span class="tag">Node.js</span>
+                                <span class="tag">Custom CRM</span>
+                            </div>
+                            <h3 class="project-title">Radio Sangam</h3>
+                            <p class="project-description">
+                                A comprehensive mobile application for Dallas's premier radio station. Features include 
+                                a unique points-based rewards system where users earn credits by listening, which can be 
+                                redeemed for event tickets and local partner deals.
+                            </p>
+                            <div class="project-features">
+                                <div class="feature"><span class="feature-icon">🎧</span><span>Live Streaming</span></div>
+                                <div class="feature"><span class="feature-icon">🎁</span><span>Rewards System</span></div>
+                                <div class="feature"><span class="feature-icon">📊</span><span>Admin Dashboard</span></div>
+                                <div class="feature"><span class="feature-icon">🔐</span><span>Secure Auth</span></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="more-projects">
+                        <h4 class="more-title">More Projects Coming Soon</h4>
+                        <p class="more-text">Additional projects and case studies will be added here.</p>
+                        <div class="project-placeholder-grid">
+                            <div class="project-placeholder"><span class="placeholder-number">02</span></div>
+                            <div class="project-placeholder"><span class="placeholder-number">03</span></div>
+                            <div class="project-placeholder"><span class="placeholder-number">04</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- CONTACT (No 3D here) -->
+        <section id="contact" class="section" data-section="4">
+            <div class="section-content contact-content">
+                <div class="section-header">
+                    <span class="section-number">04</span>
+                    <h2 class="section-title">Get In Touch</h2>
+                    <div class="section-line"></div>
+                </div>
+                <div class="contact-grid">
+                    <div class="contact-info">
+                        <h3 class="contact-subtitle">Let's Build Something Amazing</h3>
+                        <p class="contact-text">
+                            Whether you have a project in mind, need technical consultation, or just want to say hello, 
+                            I'd love to hear from you.
+                        </p>
+                        <div class="contact-methods">
+                            <div class="contact-method">
+                                <div class="method-icon">📞</div>
+                                <div class="method-info">
+                                    <span class="method-label">Phone</span>
+                                    <a href="tel:+16822198682" class="method-value">682-219-8682</a>
+                                </div>
+                            </div>
+                            <div class="contact-method">
+                                <div class="method-icon">✉️</div>
+                                <div class="method-info">
+                                    <span class="method-label">Email</span>
+                                    <span class="method-value">sankalpsingh6@gmail.com</span>
+                                </div>
+                            </div>
+                            <div class="contact-method">
+                                <div class="method-icon">📍</div>
+                                <div class="method-info">
+                                    <span class="method-label">Location</span>
+                                    <span class="method-value">Mckinney, Texas</span>
+                                </div>
+                            </div>
+                        </div>
+                        <button class="chatbot-btn" onclick="openChatbot()">
+                            <span class="btn-icon">💬</span>
+                            <span>Chat with AI Assistant</span>
+                        </button>
+                    </div>
+                    <div class="contact-form-container">
+                        <form id="contact-form" class="contact-form">
+                            <div class="form-group">
+                                <label for="name">Your Name</label>
+                                <input type="text" id="name" name="name" required placeholder="John Doe">
+                            </div>
+                            <div class="form-group">
+                                <label for="email">Email Address</label>
+                                <input type="email" id="email" name="email" required placeholder="john@example.com">
+                            </div>
+                            <div class="form-group">
+                                <label for="subject">Subject</label>
+                                <input type="text" id="subject" name="subject" required placeholder="Project Inquiry">
+                            </div>
+                            <div class="form-group">
+                                <label for="message">Your Message</label>
+                                <textarea id="message" name="message" required placeholder="Tell me about your project..."></textarea>
+                            </div>
+                            <button type="submit" class="submit-btn">
+                                <span>Send Message</span>
+                                <span>→</span>
+                            </button>
+                        </form>
+                        <div id="form-status" class="form-status"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Chatbot Widget -->
+    <div id="chatbot-container" class="chatbot-container">
+        <div class="chatbot-header">
+            <div class="chatbot-avatar"><span>SS</span></div>
+            <div class="chatbot-title">
+                <h4>Sankalp's Assistant</h4>
+                <span class="chatbot-status">Online</span>
+            </div>
+            <button class="chatbot-close" onclick="closeChatbot()">✕</button>
+        </div>
+        <div class="chatbot-messages" id="chatbot-messages">
+            <div class="message bot">
+                <div class="message-content">
+                    <p>Hello! I'm Sankalp's AI assistant. How can I help you today?</p>
+                </div>
+            </div>
+        </div>
+        <div class="chatbot-quick-actions">
+            <button class="quick-action" data-message="Tell me about Sankalp's experience">Experience</button>
+            <button class="quick-action" data-message="What are your rates?">Rates</button>
+            <button class="quick-action" data-message="I'd like to schedule a meeting">Schedule</button>
+        </div>
+        <div class="chatbot-input">
+            <input type="text" id="chatbot-input-field" placeholder="Type your message...">
+            <button id="chatbot-send" class="send-btn">→</button>
+        </div>
+    </div>
+
+    <!-- Chatbot Toggle -->
+    <button id="chatbot-toggle" class="chatbot-toggle" onclick="toggleChatbot()">
+        <span class="chat-icon">💬</span>
+        <span class="toggle-text">Chat</span>
+    </button>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-content">
+            <div class="footer-brand">
+                <span class="footer-logo">SS</span>
+                <span class="footer-name">Sankalp Singh</span>
+            </div>
+            <div class="footer-links">
+                <a href="https://github.com" target="_blank" class="footer-link">GitHub</a>
+                <a href="https://linkedin.com" target="_blank" class="footer-link">LinkedIn</a>
+                <a href="https://twitter.com" target="_blank" class="footer-link">Twitter</a>
+            </div>
+            <div class="footer-copyright">
+                <span>© 2024 Sankalp Singh. All rights reserved.</span>
+            </div>
+        </div>
+    </footer>
+
+    <script src="/src/js/main.js"></script>
+    <script src="/src/js/chatbot.js"></script>
+</body>
+</html>

@@ -1,0 +1,47 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Environment variables (IMPORTANT - never commit these!)
+.env
+.env.local
+.env.production
+.env.*.local
+.env
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build outputs
+dist/
+build/
+
+# Temporary files
+
+tmp/
+temp/
+.cache/
+
+# Test coverage
+coverage/
+
+# Uploaded files (if any)
+uploads/
+
+# Local development
+*.local
